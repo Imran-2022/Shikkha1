@@ -40,9 +40,10 @@ export function usePlaceHold(classId: string) {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (studentId: string) => classesApi.placeHold(classId, studentId),
-    onSuccess: () => {
+    onSuccess: (_hold, studentId) => {
       qc.invalidateQueries({ queryKey: classKeys.all })
       qc.invalidateQueries({ queryKey: classKeys.detail(classId) })
+      qc.invalidateQueries({ queryKey: ['holds', 'student', studentId] })
     },
   })
 }

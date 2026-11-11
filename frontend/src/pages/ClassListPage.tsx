@@ -1,20 +1,22 @@
 import { useState } from 'react'
 import { useClasses, usePlaceHold } from '@/hooks/useClasses'
+import { useStudentHolds } from '@/hooks/useHolds'
 import { useStudentId } from '@/store/studentStore'
-import { formatError } from '@/utils'
+import { formatError, isHoldActive, statusLabel } from '@/utils'
 import { Alert } from '@/components/ui/Alert'
 import { Button } from '@/components/ui/Button'
+import { StatusBadge } from '@/components/ui/Badge'
 import { Card, CardHeader, CardBody } from '@/components/ui/Card'
 import { SeatBar } from '@/components/ui/SeatBar'
 import { Spinner } from '@/components/ui/Spinner'
 import { HoldModal } from './components/HoldModal'
-import type { PlaceHoldResponse } from '@/types'
+import type { PlaceHoldResponse, StudentHoldResponse } from '@/types'
 
 export function ClassListPage() {
   const { studentId, isValid } = useStudentId()
   const { data: classes, isLoading, error } = useClasses()
+  const studentHolds = useStudentHolds(studentId)
   const [activeHold, setActiveHold] = useState<PlaceHoldResponse | null>(null)
-  const [applyingForClass, setApplyingForClass] = useState<string | null>(null)
 
   if (isLoading) {
     return (
@@ -46,6 +48,13 @@ export function ClassListPage() {
             message="Enter your 17-digit birth registration number at the top of the page to apply for admission."
           />
         )}
+        {isValid && studentHolds.isError && !studentHolds.data && (
+          <Alert
+            variant="error"
+            title="Could not check your applications"
+            message={`${formatError(studentHolds.error)} New applications are disabled until your status can be checked.`}
+          />
+        )}
 
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {classes.map((cls) => (
@@ -54,15 +63,10 @@ export function ClassListPage() {
               cls={cls}
               studentId={studentId}
               isValidStudent={isValid}
-              isApplying={applyingForClass === cls.id}
-              onApply={() => {
-                setApplyingForClass(cls.id)
-              }}
-              onHoldPlaced={(hold) => {
-                setApplyingForClass(null)
-                setActiveHold(hold)
-              }}
-              onApplyCancel={() => setApplyingForClass(null)}
+              existingHold={findClassApplication(studentHolds.data, cls.id)}
+              isCheckingApplication={isValid && !studentHolds.data && studentHolds.isLoading}
+              applicationStatusUnavailable={isValid && !studentHolds.data && studentHolds.isError}
+              onHoldPlaced={setActiveHold}
             />
           ))}
         </div>
@@ -85,40 +89,41 @@ interface ClassCardProps {
   cls: import('@/types').SchoolClass
   studentId: string
   isValidStudent: boolean
-  isApplying: boolean
-  onApply: () => void
+  existingHold: StudentHoldResponse | undefined
+  isCheckingApplication: boolean
+  applicationStatusUnavailable: boolean
   onHoldPlaced: (hold: PlaceHoldResponse) => void
-  onApplyCancel: () => void
 }
 
 function ClassCard({
   cls,
   studentId,
   isValidStudent,
-  isApplying,
-  onApply,
+  existingHold,
+  isCheckingApplication,
+  applicationStatusUnavailable,
   onHoldPlaced,
-  onApplyCancel,
 }: ClassCardProps) {
   const placeHold = usePlaceHold(cls.id)
   const [localError, setLocalError] = useState<string | null>(null)
 
   const handleApply = async () => {
-    if (!isApplying) {
-      onApply()
-      return
-    }
     setLocalError(null)
     try {
       const hold = await placeHold.mutateAsync(studentId)
       onHoldPlaced(hold)
     } catch (err) {
       setLocalError(formatError(err))
-      onApplyCancel()
     }
   }
 
   const isFull = cls.availableSeats === 0
+  const holdStatus = existingHold
+    ? statusLabel(existingHold.status, existingHold.expiresAt)
+    : undefined
+  const hasActiveApplication =
+    existingHold?.status === 'CONFIRMED' ||
+    (existingHold !== undefined && isHoldActive(existingHold.status, existingHold.expiresAt))
 
   return (
     <Card>
@@ -129,8 +134,30 @@ function ClassCard({
         <SeatBar cls={cls} />
 
         {localError && <Alert variant="error" message={localError} />}
+        {existingHold && !hasActiveApplication && holdStatus && (
+          <StatusBadge status={holdStatus} expiresAt={existingHold.expiresAt} />
+        )}
 
-        {isFull ? (
+        {hasActiveApplication && existingHold && holdStatus === 'CONFIRMED' ? (
+          <div className="space-y-2">
+            <StatusBadge status={holdStatus} />
+            <p className="text-sm text-green-700">Your admission is confirmed.</p>
+          </div>
+        ) : hasActiveApplication && existingHold ? (
+          <div className="space-y-2">
+            <StatusBadge
+              status={statusLabel(existingHold.status, existingHold.expiresAt)}
+              expiresAt={existingHold.expiresAt}
+            />
+            <p className="text-sm text-amber-700">
+              Your seat is on hold. Complete payment from My Applications.
+            </p>
+          </div>
+        ) : isCheckingApplication ? (
+          <Button disabled className="w-full">Checking application…</Button>
+        ) : applicationStatusUnavailable ? (
+          <Button disabled className="w-full">Application status unavailable</Button>
+        ) : isFull ? (
           <span className="inline-block rounded-full bg-red-100 px-3 py-1 text-xs font-semibold text-red-700">
             No seats available
           </span>
@@ -138,14 +165,27 @@ function ClassCard({
           <Button
             onClick={handleApply}
             loading={placeHold.isPending}
-            disabled={!isValidStudent || isFull}
+            disabled={!isValidStudent}
             className="w-full"
             title={!isValidStudent ? 'Enter your student ID first' : undefined}
           >
-            Apply Now
+            {existingHold ? 'Apply again' : 'Apply Now'}
           </Button>
         )}
       </CardBody>
     </Card>
+  )
+}
+
+function findClassApplication(
+  holds: StudentHoldResponse[] | undefined,
+  classId: string
+): StudentHoldResponse | undefined {
+  const classHolds = holds?.filter((hold) => hold.classId === classId) ?? []
+
+  return (
+    classHolds.find((hold) => hold.status === 'CONFIRMED') ??
+    classHolds.find((hold) => isHoldActive(hold.status, hold.expiresAt)) ??
+    classHolds[0]
   )
 }
