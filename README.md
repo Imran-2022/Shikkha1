@@ -1,7 +1,5 @@
 # School Admission System
 
-A full-stack online school admission system built for **Onnorokom Projukti Limited**.
-
 ## Stack
 
 | Layer    | Technology                                      |
@@ -44,11 +42,21 @@ docker compose up --build
 |----------|----------------------------|
 | Frontend | http://localhost           |
 | Backend API | http://localhost:8080   |
-| API Docs (dev) | http://localhost:8080/scalar |
 
 > Database data persists across restarts via a named Docker volume.  
 > `docker compose down` stops containers; data is preserved.  
 > `docker compose down -v` removes data volumes too.
+
+### API documentation (Development only)
+
+Docker Compose runs the backend in `Production`, where the OpenAPI and Scalar endpoints are disabled. To open the API docs, start PostgreSQL with Docker and run the backend locally in Development:
+
+```bash
+docker compose up -d db
+dotnet run --project backend/src/SchoolAdmission.API
+```
+
+Then open http://localhost:8080/scalar. The Development environment uses the local PostgreSQL connection configured in `appsettings.Development.json`.
 
 ---
 
