@@ -1,0 +1,21 @@
+# .NET build output
+**/bin/
+**/obj/
+**/TestResults/
+
+# Node.js and frontend build output
+**/node_modules/
+**/dist/
+
+# Local environment and IDE files
+.env
+.env.*
+!.env.example
+**/.vs/
+**/.idea/
+*.user
+*.suo
+
+# OS files
+.DS_Store
+Thumbs.db

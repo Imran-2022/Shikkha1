@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>SchoolAdmission.Domain</RootNamespace>
+    <AssemblyName>SchoolAdmission.Domain</AssemblyName>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- IDomainEvent : INotification only needs the contracts package, not full MediatR -->
+    <PackageReference Include="MediatR.Contracts" Version="2.*" />
+  </ItemGroup>
+
+</Project>
